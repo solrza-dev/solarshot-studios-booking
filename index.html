@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Solarshot Studios — Book a Studio Session</title>
+<meta name="description" content="Book studio time at Solarshot Studios. Choose your session, pick a time that works, and tell us how you want to handle your beat." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%230c0c0e'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='%23f5a524' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23f5a524'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --bg-2: #101014;
+    --panel: #14141a;
+    --panel-2: #1a1a22;
+    --line: #26262e;
+    --line-2: #34343e;
+    --text: #f5f5f7;
+    --muted: #9d9da8;
+    --muted-2: #6f6f7a;
+    --accent: #f5a524;
+    --accent-2: #ffc85c;
+    --accent-soft: rgba(245, 165, 36, 0.12);
+    --ok: #58c98d;
+    --radius: 18px;
+    --radius-sm: 12px;
+    --shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.65);
+    --font-display: "Space Grotesk", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Ambient glows */
+  .glow { pointer-events: none; position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.5; z-index: 0; }
+  .glow-a { width: 560px; height: 560px; top: -220px; left: -140px; background: radial-gradient(circle, rgba(245,165,36,0.22), transparent 65%); }
+  .glow-b { width: 640px; height: 640px; bottom: -280px; right: -200px; background: radial-gradient(circle, rgba(120,90,255,0.14), transparent 65%); }
+
+  .wrap { position: relative; z-index: 1; max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── Top bar ─────────────────────────────── */
+  header.site {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(10, 10, 12, 0.78);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), #d97f0a);
+    box-shadow: 0 6px 18px -6px rgba(245,165,36,0.55);
+  }
+  .brand-mark svg { width: 20px; height: 20px; }
+  .brand-name { font-family: var(--font-display); font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
+  .brand-name span { color: var(--accent-2); }
+  nav.main { display: flex; gap: 26px; align-items: center; }
+  nav.main a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .18s; }
+  nav.main a:hover { color: var(--text); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; justify-content: center;
+    font-family: var(--font-display); font-weight: 600; font-size: 14.5px; letter-spacing: 0.2px;
+    border-radius: 12px; padding: 11px 20px; cursor: pointer; text-decoration: none;
+    border: 1px solid transparent; transition: transform .16s, box-shadow .16s, background .16s, border-color .16s;
+  }
+  .btn:active { transform: translateY(1px) scale(0.99); }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), #e08c12); color: #171206; box-shadow: 0 10px 26px -10px rgba(245,165,36,0.65); }
+  .btn-primary:hover { box-shadow: 0 14px 34px -10px rgba(245,165,36,0.8); transform: translateY(-1px); }
+  .btn-ghost { border-color: var(--line-2); color: var(--text); background: rgba(255,255,255,0.02); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent-2); }
+  .btn-sm { padding: 8px 15px; font-size: 13px; border-radius: 10px; }
+
+  /* ── Hero ────────────────────────────────── */
+  section.hero { padding: 96px 0 64px; text-align: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line-2); background: var(--panel); color: var(--muted);
+    font-size: 12.5px; font-weight: 500; letter-spacing: 1.4px; text-transform: uppercase;
+    padding: 7px 14px; border-radius: 999px; margin-bottom: 28px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(88,201,141,0.18); }
+  h1 {
+    font-family: var(--font-display); font-weight: 700; font-size: clamp(40px, 6.2vw, 68px);
+    line-height: 1.06; letter-spacing: -1.5px; max-width: 18ch; margin: 0 auto 22px;
+  }
+  h1 em { font-style: normal; background: linear-gradient(120deg, var(--accent-2), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.lead { color: var(--muted); font-size: 18px; max-width: 56ch; margin: 0 auto 36px; }
+  .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .hero-note { margin-top: 26px; color: var(--muted-2); font-size: 13.5px; }
+  .hero-note b { color: var(--muted); font-weight: 600; }
+
+  /* ── Availability strip ───────────────────── */
+  .strip {
+    display: flex; align-items: center; justify-content: center; gap: 10px 26px; flex-wrap: wrap;
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+    padding: 16px 24px; margin-bottom: 88px;
+  }
+  .strip .day { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); }
+  .strip .day b { color: var(--text); font-weight: 600; font-family: var(--font-display); font-size: 14px; }
+  .strip .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  /* ── Sections ─────────────────────────────── */
+  section.block { padding: 0 0 96px; }
+  .kicker { color: var(--accent-2); font-size: 12.5px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+  h2 { font-family: var(--font-display); font-size: clamp(28px, 3.6vw, 40px); font-weight: 700; letter-spacing: -0.8px; margin-bottom: 14px; }
+  .sub { color: var(--muted); font-size: 16px; max-width: 60ch; margin-bottom: 40px; }
+
+  /* ── Session cards ────────────────────────── */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card {
+    display: flex; flex-direction: column; gap: 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 26px; position: relative; overflow: hidden;
+    transition: border-color .2s, transform .2s, box-shadow .2s;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0; transition: opacity .25s;
+  }
+  .card:hover { border-color: var(--line-2); transform: translateY(-3px); box-shadow: var(--shadow); }
+  .card:hover::before { opacity: 1; }
+  .card .badge {
+    align-self: flex-start; font-family: var(--font-display); font-size: 12px; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase; color: var(--accent-2);
+    border: 1px solid rgba(245,165,36,0.35); background: var(--accent-soft);
+    padding: 5px 11px; border-radius: 999px;
+  }
+  .card h3 { font-family: var(--font-display); font-size: 21px; font-weight: 700; letter-spacing: -0.3px; }
+  .card p { color: var(--muted); font-size: 14.2px; flex: 1; }
+  .card ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .card ul li { display: flex; gap: 9px; align-items: flex-start; font-size: 13.5px; color: var(--muted); }
+  .card ul li svg { flex-shrink: 0; margin-top: 3px; }
+  .card .btn { margin-top: 6px; }
+
+  /* ── Beat flow ────────────────────────────── */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .step { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; position: relative; }
+  .step .num {
+    font-family: var(--font-display); font-weight: 700; font-size: 13px; color: var(--accent);
+    border: 1px solid var(--line-2); border-radius: 8px; width: 30px; height: 30px;
+    display: grid; place-items: center; margin-bottom: 14px;
+  }
+  .step h3 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .step p { color: var(--muted); font-size: 14px; }
+
+  /* ── Booking embed ────────────────────────── */
+  section.booking { padding-bottom: 96px; }
+  .booking-shell {
+    border: 1px solid var(--line); border-radius: 22px; background: var(--bg-2);
+    overflow: hidden; box-shadow: var(--shadow);
+  }
+  .booking-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    padding: 20px 26px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .booking-head h3 { font-family: var(--font-display); font-size: 18px; font-weight: 700; }
+  .booking-head .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .booking-head .meta b { color: var(--accent-2); font-weight: 600; }
+  .booking-switch { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12.5px; font-weight: 600; font-family: var(--font-display); letter-spacing: 0.2px;
+    color: var(--muted); background: transparent; border: 1px solid var(--line-2);
+    padding: 7px 13px; border-radius: 999px; cursor: pointer; transition: all .16s;
+  }
+  .chip:hover { color: var(--text); border-color: var(--muted-2); }
+  .chip.active { color: #171206; background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
+  #cal-embed { min-height: 640px; background: var(--bg-2); }
+  #cal-embed .loader { display: grid; place-items: center; min-height: 640px; color: var(--muted); font-size: 14px; }
+  .booking-foot { padding: 14px 26px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .booking-foot span { color: var(--muted-2); font-size: 12.5px; }
+  .booking-foot a { color: var(--accent-2); font-size: 13px; text-decoration: none; font-weight: 600; }
+  .booking-foot a:hover { text-decoration: underline; }
+
+  /* ── Info / FAQ ───────────────────────────── */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .info { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+  .info h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-bottom: 8px; display: flex; gap: 10px; align-items: center; }
+  .info p { color: var(--muted); font-size: 14px; }
+
+  footer.site { border-top: 1px solid var(--line); padding: 34px 0 44px; }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+  footer .muted { color: var(--muted-2); font-size: 13px; }
+  footer a { color: var(--muted); text-decoration: none; font-size: 13.5px; }
+  footer a:hover { color: var(--accent-2); }
+
+  @media (max-width: 900px) {
+    .grid, .steps { grid-template-columns: 1fr; }
+    .info-grid { grid-template-columns: 1fr; }
+    nav.main { display: none; }
+    section.hero { padding-top: 64px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
+  <header class="site">
+    <div class="wrap topbar">
+      <a class="brand" href="#top">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="6.6" stroke="#14100a" stroke-width="2.5"/><circle cx="12" cy="12" r="2.3" fill="#14100a"/></svg>
+        </span>
+        <span class="brand-name">Solarshot <span>Studios</span></span>
+      </a>
+      <nav class="main">
+        <a href="#sessions">Sessions</a>
+        <a href="#beat-flow">Beat Flow</a>
+        <a href="#book">Book Now</a>
+        <a href="#info">Info</a>
+      </nav>
+      <a class="btn btn-primary btn-sm" href="#book">Book a session</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <span class="eyebrow"><span class="dot"></span> Now booking studio time</span>
+        <h1>Book your sound at <em>Solarshot Studios</em></h1>
+        <p class="lead">Pick your session, choose a time that fits, and tell us how you want to handle your beat — bring a link, upload your file, or have us cook it up live in the room.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#sessions">Choose your session</a>
+          <a class="btn btn-ghost" href="#book">Jump to the calendar</a>
+        </div>
+        <p class="hero-note">Slot availability updates weekly — if a week looks light, check back or <b>reach out directly</b>.</p>
+      </div>
+    </section>
+
+    <div class="wrap">
+      <div class="strip">
+        <span class="day"><span class="pip"></span> <b>Tue</b> 12p – 11p</span>
+        <span class="day"><span class="pip"></span> <b>Wed</b> 11a – 6p</span>
+        <span class="day"><span class="pip"></span> <b>Thu</b> 4p – 9p</span>
+        <span class="day" style="opacity:.55">Mon · Fri · Sat · Sun — closed</span>
+      </div>
+    </div>
+
+    <section class="block" id="sessions">
+      <div class="wrap">
+        <p class="kicker">Step 1 — Pick your session</p>
+        <h2>How do you want to use the room?</h2>
+        <p class="sub">Every session is in-person at the studio, fully hands-on, and includes the beat intake below so we show up ready.</p>
+        <div class="grid" id="session-cards">
+          <article class="card" data-link="solarshot-enterprises-t1k8k7/mixing-listening-session" data-name="Mixing &amp; Listening Session" data-dur="60 min">
+            <span class="badge">60 min</span>
+            <h3>Mixing &amp; Listening</h3>
+            <p>Bring your tracks for a pro mixing, referencing, and listening session. We dial in your sound together and you walk out with direction.</p>
+            <ul>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Mixing pass + A/B referencing</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Critical listening on studio monitors</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Notes + next-step game plan</li>
+            </ul>
+            <button class="btn btn-primary pick" data-index="0">Choose this session</button>
+          </article>
+
+          <article class="card" data-link="solarshot-enterprises-t1k8k7/studio-session-2-hours" data-name="Studio Session — 2 Hours" data-dur="120 min">
+            <span class="badge">2 hours</span>
+            <h3>Studio Session · 2H</h3>
+            <p>Two focused hours in the room: vocals, instruments, production passes, or a beat built live — whatever the session needs.</p>
+            <ul>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Recording / tracking time</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Beat handling per your choice below</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Dry session takes to take home</li>
+            </ul>
+            <button class="btn btn-primary pick" data-index="1">Choose this session</button>
+          </article>
+
+          <article class="card" data-link="solarshot-enterprises-t1k8k7/studio-session-4-hours" data-name="Studio Session — 4 Hours" data-dur="240 min">
+            <span class="badge">4 hours</span>
+            <h3>Studio Session · 4H</h3>
+            <p>The full session. Layered tracking, beat production, writing time — four hours to get it right without watching the clock.</p>
+            <ul>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Deep tracking / production time</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Live beat production available</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Session files + rough mix</li>
+            </ul>
+            <button class="btn btn-primary pick" data-index="2">Choose this session</button>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="beat-flow">
+      <div class="wrap">
+        <p class="kicker">Step 2 — Your beat, your way</p>
+        <h2>How will we handle your beat?</h2>
+        <p class="sub">You'll answer this inside the booking form — but here's what each option means.</p>
+        <div class="steps">
+          <div class="step">
+            <span class="num">01</span>
+            <h3>Send a beat link</h3>
+            <p>Found a beat on YouTube, SoundCloud, or a type-beat page? Paste the link when you book and we'll have it loaded and ready.</p>
+          </div>
+          <div class="step">
+            <span class="num">02</span>
+            <h3>Bring your own file</h3>
+            <p>Got your own beat or instrumental? Upload it (or paste a Drive link) and we'll pull it up the moment you walk in.</p>
+          </div>
+          <div class="step">
+            <span class="num">03</span>
+            <h3>Produce it live</h3>
+            <p>No beat yet? Give us a reference sound or creative direction in the booking form and we'll build it in the room with you.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="booking" id="book">
+      <div class="wrap">
+        <p class="kicker">Step 3 — Lock in your time</p>
+        <h2>Book your slot</h2>
+        <div class="booking-shell">
+          <div class="booking-head">
+            <div>
+              <h3 id="book-title">Studio Session — 2 Hours</h3>
+              <p class="meta" id="book-meta"><b>2 hours</b> · In person at Solarshot Studios · Beat intake in the booking form</p>
+            </div>
+            <div class="booking-switch" id="session-switch">
+              <button class="chip" data-link="solarshot-enterprises-t1k8k7/mixing-listening-session" data-name="Mixing &amp; Listening Session" data-dur="60 min">Mixing &amp; Listening · 60m</button>
+              <button class="chip active" data-link="solarshot-enterprises-t1k8k7/studio-session-2-hours" data-name="Studio Session — 2 Hours" data-dur="2 hours">Studio · 2h</button>
+              <button class="chip" data-link="solarshot-enterprises-t1k8k7/studio-session-4-hours" data-name="Studio Session — 4 Hours" data-dur="4 hours">Studio · 4h</button>
+            </div>
+          </div>
+          <div id="cal-embed"><div class="loader">Loading the calendar…</div></div>
+          <div class="booking-foot">
+            <span>Slots follow this week's studio schedule (Tue · Wed · Thu).</span>
+            <a href="https://cal.com/solarshot-enterprises-t1k8k7" target="_blank" rel="noopener">Open all sessions on Cal.com →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="info">
+      <div class="wrap">
+        <p class="kicker">Good to know</p>
+        <h2>Before you book</h2>
+        <div class="info-grid">
+          <div class="info">
+            <h3>📍 The studio</h3>
+            <p>Session info and address are included with your booking confirmation. If it's your first time, don't stress — just show up with your energy and your files.</p>
+          </div>
+          <div class="info">
+            <h3>🎧 What to bring</h3>
+            <p>Your beat link or file (or just a reference for the live production), any stems or acapellas you want to layer, and a list of the sounds you're chasing.</p>
+          </div>
+          <div class="info">
+            <h3>🗓️ Weekly schedule</h3>
+            <p>Studio hours shift week to week. The calendar always reflects the current week's availability, so what you see is what's bookable.</p>
+          </div>
+          <div class="info">
+            <h3>💬 Questions?</h3>
+            <p>Not sure which session fits? Send a message before you book — we'll point you at the right one so your time in the room counts.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap foot">
+      <span class="muted">© <span id="year"></span> Solarshot Studios · San Antonio, TX</span>
+      <a href="#top">Back to top ↑</a>
+    </div>
+  </footer>
+
+  <!-- Cal.com embed -->
+  <script type="text/javascript" src="https://app.cal.com/embed/embed.js"></script>
+  <script>
+    (function (C, A, L) {
+      let p = function (a, ar) { a.q.push(ar); };
+      let d = C.document; C.Cal = C.Cal || function () {
+        let cal = C.Cal; let ar = arguments;
+        if (!cal.loaded) {
+          cal.ns = {}; cal.q = cal.q || [];
+          d.head.appendChild(d.createElement("script")).src = A;
+          cal.loaded = true;
+        }
+        if (ar[0] === L) {
+          const api = function () { p(api, arguments); };
+          const namespace = ar[1]; api.q = api.q || [];
+          typeof namespace === "string" ? (cal.ns[namespace] = api) : p(cal, ar);
+          return;
+        }
+        p(cal, ar);
+      };
+    })(window, "https://app.cal.com/embed/embed.js", "init");
+    Cal("init", { origin: "https://cal.com" });
+
+    const SESSIONS = {
+      "solarshot-enterprises-t1k8k7/mixing-listening-session": { name: "Mixing & Listening Session", dur: "60 min" },
+      "solarshot-enterprises-t1k8k7/studio-session-2-hours":  { name: "Studio Session — 2 Hours", dur: "2 hours" },
+      "solarshot-enterprises-t1k8k7/studio-session-4-hours":  { name: "Studio Session — 4 Hours", dur: "4 hours" }
+    };
+
+    let currentLink = "solarshot-enterprises-t1k8k7/studio-session-2-hours";
+
+    function mountEmbed(calLink) {
+      const container = document.getElementById("cal-embed");
+      container.innerHTML = '<div class="loader">Loading the calendar…</div>';
+      const node = document.createElement("div");
+      node.id = "cal-inline";
+      container.innerHTML = "";
+      container.appendChild(node);
+      Cal("inline", {
+        elementOrSelector: "#cal-inline",
+        calLink: calLink,
+        config: {
+          layout: "month_view",
+          theme: "dark",
+          hideEventTypeDetails: true
+        },
+        calOrigin: "https://cal.com"
+      });
+    }
+
+    function selectSession(calLink, fromCard) {
+      if (!SESSIONS[calLink]) return;
+      currentLink = calLink;
+      const s = SESSIONS[calLink];
+      document.getElementById("book-title").textContent = s.name;
+      document.getElementById("book-meta").innerHTML =
+        "<b>" + s.dur + "</b> · In person at Solarshot Studios · Beat intake in the booking form";
+
+      document.querySelectorAll("#session-switch .chip").forEach(c => {
+        c.classList.toggle("active", c.dataset.link === calLink);
+      });
+      document.querySelectorAll("#session-cards .card").forEach(c => {
+        c.classList.toggle("selected", c.dataset.link === calLink);
+      });
+
+      mountEmbed(calLink);
+
+      if (fromCard) {
+        document.getElementById("book").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    document.querySelectorAll("#session-switch .chip").forEach(chip => {
+      chip.addEventListener("click", () => selectSession(chip.dataset.link, false));
+    });
+    document.querySelectorAll("#session-cards .pick").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const card = btn.closest(".card");
+        selectSession(card.dataset.link, true);
+      });
+    });
+
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    // Initial mount
+    selectSession(currentLink, false);
+  </script>
+</body>
+</html>
