@@ -381,8 +381,7 @@
     </div>
   </footer>
 
-  <!-- Cal.com embed -->
-  <script type="text/javascript" src="https://app.cal.com/embed/embed.js"></script>
+  <!-- Cal.com embed — bootstrap injects embed.js itself (loading it statically here double-loads the script and breaks the embed) -->
   <script>
     (function (C, A, L) {
       let p = function (a, ar) { a.q.push(ar); };
