@@ -165,3 +165,7 @@ Implementation is complete only when all of these pass:
 ## Stop Condition
 
 Stop immediately after the production acceptance checks pass and the verified implementation is pushed to `main`. Any apex-domain website, email configuration, analytics, payment processor, authentication layer, additional event type, redesign, or hosting migration requires a new owner-approved scope delta.
+
+## Implementation Evidence Correction — 2026-08-11
+
+Cloudflare's current Workers Rate Limiting documentation states that Rate Limiting bindings are not visible as dashboard objects. The approved behavior is unchanged. Acceptance evidence for `BOOKINGS_RATE_LIMITER` is the committed Wrangler configuration, an exercised `429` response, and privacy-safe Worker logs. The dashboard remains the operational surface for the zone, Worker, deployment, Static Assets, Custom Domain, certificate, secret name, logs, and analytics.

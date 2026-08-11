@@ -36,7 +36,9 @@
 - Create: `test/tsconfig.json` — Workers Vitest test types.
 - Create: `vitest.config.ts` — Cloudflare Workers test pool.
 - Create: `playwright.config.ts` — local Wrangler browser test server and desktop/mobile projects.
-- Create: `tsconfig.json` — strict Worker and test type checking.
+- Create: `tsconfig.json` — strict Worker type checking without browser DOM globals.
+- Create: `tsconfig.tools.json` — Node-side Vitest and Playwright configuration type checking.
+- Create: `test/tsconfig.browser.json` — Playwright spec type checking without Workers globals.
 - Create: `package.json` and `package-lock.json` — exact scripts and pinned development dependencies.
 - Create: `wrangler.jsonc` — Worker, assets, rate limit, observability, secret declaration, and later the verified custom domain.
 - Create: `.gitignore` — dependency, Wrangler state, local-secret, and browser-output exclusions.
@@ -100,7 +102,7 @@ Create `package.json`:
   "scripts": {
     "test": "vitest run",
     "test:browser": "playwright test",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json && tsc --noEmit -p test/tsconfig.browser.json && tsc --noEmit -p tsconfig.tools.json",
     "types": "wrangler types ./src/worker-configuration.d.ts",
     "check": "npm run types && npm run typecheck && npm test && wrangler deploy --dry-run",
     "dev": "wrangler dev --local --port 8787",
@@ -109,6 +111,7 @@ Create `package.json`:
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.21.1",
     "@playwright/test": "1.62.1",
+    "@types/node": "26.2.0",
     "typescript": "7.0.2",
     "vitest": "4.1.10",
     "wrangler": "4.121.0"
@@ -126,16 +129,16 @@ Create `tsconfig.json`:
 {
   "compilerOptions": {
     "target": "ES2023",
+    "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
-    "noEmit": true,
-    "types": ["./src/worker-configuration.d.ts"]
+    "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "playwright.config.ts"]
+  "include": ["src/**/*.ts"]
 }
 ```
 
@@ -146,11 +149,14 @@ Create `test/tsconfig.json`:
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "moduleResolution": "Bundler",
-    "types": ["@cloudflare/vitest-pool-workers/types", "../src/worker-configuration.d.ts"]
+    "skipLibCheck": true,
+    "types": ["@cloudflare/vitest-pool-workers/types"]
   },
-  "include": ["./**/*.ts", "../src/worker-configuration.d.ts"]
+  "include": ["./**/*.test.ts", "../src/worker-configuration.d.ts"]
 }
 ```
+
+Create `tsconfig.tools.json` and `test/tsconfig.browser.json` as separate Node/browser programs. This prevents TypeScript from merging generated Workers globals with browser DOM globals while still type-checking every source category. `skipLibCheck` is limited to the Workers test and Node tooling programs because the current Cloudflare Vitest/Miniflare declaration bundles do not typecheck cleanly against their own dependency graph; project and configuration source remain under `strict` checking.
 
 Create `vitest.config.ts`:
 
