@@ -180,17 +180,19 @@ export default defineConfig({
   testDir: "./test",
   testMatch: "**/*.spec.ts",
   webServer: {
-    command: "npx wrangler dev --local --port 8787",
-    url: "http://127.0.0.1:8787",
+    command: "npx wrangler dev --local --port 8791",
+    url: "http://127.0.0.1:8791",
     reuseExistingServer: false,
   },
-  use: { baseURL: "http://127.0.0.1:8787", trace: "retain-on-failure" },
+  use: { baseURL: "http://127.0.0.1:8791", trace: "retain-on-failure" },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 } } },
     { name: "mobile", use: { ...devices["iPhone 16"] } },
   ],
 });
 ```
+
+Port `8791` is reserved for this test server because the owner-managed TaskOps dashboard already occupies `127.0.0.1:8787`; that unrelated process must not be stopped or reused.
 
 - [ ] **Step 5: Add the Cloudflare configuration without the live custom domain**
 
@@ -692,11 +694,11 @@ export default defineConfig({
   testDir: "./test",
   testMatch: "**/*.spec.ts",
   webServer: {
-    command: "npx wrangler dev --local --port 8787",
-    url: "http://127.0.0.1:8787",
+    command: "npx wrangler dev --local --port 8791",
+    url: "http://127.0.0.1:8791",
     reuseExistingServer: false,
   },
-  use: { baseURL: "http://127.0.0.1:8787", trace: "retain-on-failure" },
+  use: { baseURL: "http://127.0.0.1:8791", trace: "retain-on-failure" },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 } } },
     { name: "mobile", use: { ...devices["iPhone 16"] } },

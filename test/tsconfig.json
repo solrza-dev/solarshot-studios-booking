@@ -5,5 +5,5 @@
     "skipLibCheck": true,
     "types": ["@cloudflare/vitest-pool-workers/types"]
   },
-  "include": ["./**/*.test.ts", "../src/worker-configuration.d.ts"]
+  "include": ["./**/*.test.ts", "./**/*.d.ts", "../src/worker-configuration.d.ts"]
 }

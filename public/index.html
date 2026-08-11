@@ -185,6 +185,41 @@
   .booking-foot a { color: var(--accent-2); font-size: 13px; text-decoration: none; font-weight: 600; }
   .booking-foot a:hover { text-decoration: underline; }
 
+  /* ── My Sessions lookup ───────────────────── */
+  section.lookup { padding-bottom: 96px; }
+  .lookup-panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 26px; box-shadow: var(--shadow);
+  }
+  .lookup-panel label { display: block; font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-bottom: 9px; }
+  .lookup-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .lookup-row input {
+    width: 100%; min-height: 44px; border: 1px solid var(--line-2); border-radius: 12px;
+    background: var(--bg-2); color: var(--text); font: inherit; padding: 10px 14px;
+  }
+  .lookup-row .btn { min-height: 44px; }
+  .lookup-row input::placeholder { color: var(--muted-2); }
+  .lookup-row input:focus-visible, .lookup-row .btn:focus-visible {
+    outline: 2px solid var(--accent-2); outline-offset: 2px;
+  }
+  .lookup-help, .lookup-status { color: var(--muted); font-size: 13px; }
+  .lookup-help { margin-top: 9px; }
+  .lookup-status { min-height: 24px; margin-top: 18px; }
+  .session-results { display: grid; gap: 10px; margin-top: 8px; }
+  .session-results[hidden] { display: none; }
+  .session-result {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 18px;
+    align-items: start; background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: var(--radius-sm); padding: 16px;
+  }
+  .session-result h3 { font-family: var(--font-display); font-size: 16px; }
+  .session-result p { color: var(--muted); font-size: 13px; }
+  .status-chip {
+    border: 1px solid var(--line-2); border-radius: 999px; padding: 5px 10px;
+    color: var(--accent-2); background: var(--accent-soft); font-size: 12px;
+    font-family: var(--font-display); font-weight: 600; text-transform: capitalize;
+  }
+
   /* ── Info / FAQ ───────────────────────────── */
   .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .info { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
@@ -200,6 +235,8 @@
   @media (max-width: 900px) {
     .grid, .steps { grid-template-columns: 1fr; }
     .info-grid { grid-template-columns: 1fr; }
+    .lookup-row { grid-template-columns: 1fr; }
+    .session-result { grid-template-columns: 1fr; }
     nav.main { display: none; }
     section.hero { padding-top: 64px; }
   }
@@ -224,6 +261,7 @@
         <a href="#sessions">Sessions</a>
         <a href="#beat-flow">Beat Flow</a>
         <a href="#book">Book Now</a>
+        <a href="#my-sessions">My Sessions</a>
         <a href="#info">Info</a>
       </nav>
       <a class="btn btn-primary btn-sm" href="#book">Book a session</a>
@@ -239,6 +277,7 @@
         <div class="hero-cta">
           <a class="btn btn-primary" href="#sessions">Choose your session</a>
           <a class="btn btn-ghost" href="#book">Jump to the calendar</a>
+          <a class="btn btn-ghost" href="#my-sessions">My Sessions</a>
         </div>
         <p class="hero-note">Slot availability updates weekly — if a week looks light, check back or <b>reach out directly</b>.</p>
       </div>
@@ -325,8 +364,9 @@
 
     <section class="booking" id="book">
       <div class="wrap">
-        <p class="kicker">Step 3 — Lock in your time</p>
+        <p class="kicker">Step 3 — Request your time</p>
         <h2>Book your slot</h2>
+        <p class="sub">Choose a slot and submit a pending request. Pay with Cash App, Apple Pay, or Zelle using the method and handle entered in the form. Isaiah verifies payment and approves the request; only then is the slot reserved.</p>
         <div class="booking-shell">
           <div class="booking-head">
             <div>
@@ -344,6 +384,26 @@
             <span>Slots follow this week's studio schedule (Tue · Wed · Thu).</span>
             <a href="https://cal.com/solarshot-enterprises-t1k8k7" target="_blank" rel="noopener">Open all sessions on Cal.com →</a>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block lookup" id="my-sessions">
+      <div class="wrap">
+        <p class="kicker">Already requested a time?</p>
+        <h2>My Sessions</h2>
+        <p class="sub">Use the same email you entered when booking to check upcoming accepted and pending requests.</p>
+        <div class="lookup-panel">
+          <form id="my-sessions-form" novalidate>
+            <label for="booking-email">Email used to book</label>
+            <div class="lookup-row">
+              <input id="booking-email" name="email" type="email" autocomplete="email" required />
+              <button class="btn btn-primary" type="submit">Find my sessions</button>
+            </div>
+            <p class="lookup-help">We show upcoming accepted and pending requests only.</p>
+          </form>
+          <div id="my-sessions-status" class="lookup-status" aria-live="polite"></div>
+          <div id="my-sessions-results" class="session-results" hidden></div>
         </div>
       </div>
     </section>
@@ -366,8 +426,8 @@
             <p>Studio hours shift week to week. The calendar always reflects the current week's availability, so what you see is what's bookable.</p>
           </div>
           <div class="info">
-            <h3>💬 Questions?</h3>
-            <p>Not sure which session fits? Send a message before you book — we'll point you at the right one so your time in the room counts.</p>
+            <h3>💳 Payment and approval</h3>
+            <p>Choose a slot and submit a pending request. Pay with Cash App, Apple Pay, or Zelle using the method and handle entered in the form. Isaiah verifies payment and approves the request; only then is the slot reserved.</p>
           </div>
         </div>
       </div>
@@ -377,6 +437,7 @@
   <footer class="site">
     <div class="wrap foot">
       <span class="muted">© <span id="year"></span> Solarshot Studios · San Antonio, TX</span>
+      <a href="#my-sessions">My Sessions</a>
       <a href="#top">Back to top ↑</a>
     </div>
   </footer>
@@ -460,6 +521,114 @@
         const card = btn.closest(".card");
         selectSession(card.dataset.link, true);
       });
+    });
+
+    const mySessionsForm = document.getElementById("my-sessions-form");
+    const bookingEmail = document.getElementById("booking-email");
+    const lookupStatus = document.getElementById("my-sessions-status");
+    const lookupResults = document.getElementById("my-sessions-results");
+    const sessionDateTime = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
+    let lookupController = null;
+
+    function resetLookupResults() {
+      lookupResults.replaceChildren();
+      lookupResults.hidden = true;
+    }
+
+    function renderSessions(sessions) {
+      resetLookupResults();
+
+      sessions.forEach(session => {
+        const item = document.createElement("article");
+        item.className = "session-result";
+
+        const details = document.createElement("div");
+        const title = document.createElement("h3");
+        title.textContent = session.title;
+        const eventType = document.createElement("p");
+        eventType.textContent = session.eventTypeSlug;
+        const time = document.createElement("p");
+        time.textContent = sessionDateTime.format(new Date(session.start)) +
+          " – " + sessionDateTime.format(new Date(session.end));
+        details.append(title, eventType, time);
+
+        const status = document.createElement("span");
+        status.className = "status-chip";
+        status.textContent = session.status === "accepted" ? "Accepted" : "Pending";
+
+        item.append(details, status);
+        lookupResults.appendChild(item);
+      });
+
+      lookupResults.hidden = false;
+    }
+
+    function isPublicSession(session) {
+      return session &&
+        typeof session.title === "string" &&
+        typeof session.start === "string" &&
+        typeof session.end === "string" &&
+        (session.status === "accepted" || session.status === "pending") &&
+        typeof session.eventTypeSlug === "string" &&
+        Number.isFinite(Date.parse(session.start)) &&
+        Number.isFinite(Date.parse(session.end));
+    }
+
+    mySessionsForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      const email = bookingEmail.value.trim().toLowerCase();
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+        lookupStatus.textContent = "Enter a valid email address.";
+        resetLookupResults();
+        return;
+      }
+
+      if (lookupController) lookupController.abort();
+      lookupController = new AbortController();
+      lookupStatus.textContent = "Loading your upcoming sessions…";
+      resetLookupResults();
+
+      try {
+        const response = await fetch(
+          "/api/bookings?email=" + encodeURIComponent(email),
+          { signal: lookupController.signal }
+        );
+
+        if (!response.ok) {
+          if (response.status === 400) {
+            lookupStatus.textContent = "Enter a valid email address.";
+          } else if (response.status === 429) {
+            lookupStatus.textContent = "Too many requests. Please wait briefly and try again.";
+          } else {
+            lookupStatus.textContent = "Sessions are temporarily unavailable. Please try again shortly.";
+          }
+          return;
+        }
+
+        const body = await response.json();
+        if (!body || !Array.isArray(body.sessions) || !body.sessions.every(isPublicSession)) {
+          throw new Error("invalid_lookup_response");
+        }
+
+        if (body.sessions.length === 0) {
+          lookupStatus.textContent = "No upcoming sessions are available to show. Check the email and try again if needed.";
+          return;
+        }
+
+        renderSessions(body.sessions);
+        lookupStatus.textContent = body.sessions.length === 1
+          ? "Showing 1 upcoming session."
+          : "Showing " + body.sessions.length + " upcoming sessions.";
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        lookupStatus.textContent = "Sessions are temporarily unavailable. Please try again shortly.";
+        resetLookupResults();
+      }
     });
 
     document.getElementById("year").textContent = new Date().getFullYear();
