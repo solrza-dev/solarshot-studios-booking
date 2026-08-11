@@ -2,11 +2,11 @@
 
 ## Status
 
-Approved direction for implementation. Isaiah directed execution after selecting and purchasing `solarshotmusic.com` through Porkbun. The public booking hostname is `studio.solarshotmusic.com`.
+Revised direction for implementation. Isaiah selected and purchased `solarshotmusic.com` through Porkbun, then directed the entire site and API to move to Cloudflare. The public booking hostname is `studio.solarshotmusic.com`. The similar `solarshopmusic.com` spelling is unregistered and is not part of this project.
 
 ## Goal
 
-Complete the four remaining booking features without regressing the working Cal.com embed or replacing the existing GitHub Pages deployment:
+Complete the four remaining booking features without regressing the working Cal.com embed, and move the complete production site from GitHub Pages to one Cloudflare-managed runtime:
 
 1. Manual payment verification and owner approval for every booking.
 2. A Cloudflare-fronted custom hostname with Full (strict) HTTPS.
@@ -15,8 +15,8 @@ Complete the four remaining booking features without regressing the working Cal.
 
 ## Locked Constraints
 
-- Keep Porkbun as registrar. Cloudflare provides authoritative DNS, proxying, HTTPS, and the Worker.
-- Keep GitHub Pages as the static-site origin and retain the existing GitHub Pages URL as a fallback.
+- Keep Porkbun as registrar for purchases, renewal, registrar lock, and WHOIS privacy. Cloudflare provides authoritative DNS, static hosting, HTTPS, the Worker, secrets, logs, and analytics.
+- Make one Cloudflare Worker with Static Assets the production origin for both the site and API. GitHub Pages is no longer the production origin after verified cutover.
 - Keep the frontend in the existing single `index.html`.
 - Load `https://app.cal.com/embed/embed.js` exactly once, only through the existing bootstrap.
 - Do not add Stripe or any payment processor.
@@ -26,29 +26,32 @@ Complete the four remaining booking features without regressing the working Cal.
 
 ## Architecture
 
-The static site remains on GitHub Pages. GitHub Pages is configured with the custom domain `studio.solarshotmusic.com`, and Cloudflare proxies that hostname to the GitHub Pages origin. A Cloudflare Worker route matches only `studio.solarshotmusic.com/api/bookings*`; every other request passes directly to GitHub Pages.
+One Cloudflare Worker project becomes the production origin for the complete site. Cloudflare Workers Static Assets serves the single HTML page, while the Worker script handles only `/api/*`. The Worker Custom Domain `studio.solarshotmusic.com` points every path on that hostname to this project; Cloudflare creates the necessary DNS record and certificate automatically after the zone is active.
 
-This retains the known-good site origin and limits the Worker to the one dynamic feature. It also keeps the existing `https://solrza-dev.github.io/solarshot-studios-booking/` deployment available during DNS and certificate propagation.
+The current GitHub Pages deployment remains untouched during development and Cloudflare preview testing. It stops being the selected production origin only after the Cloudflare custom hostname passes all acceptance checks. The repository may continue to exist on GitHub as source control, but Cloudflare owns production hosting and operations.
 
-The repository adds a focused Worker package beside the static page:
+The repository becomes one focused Cloudflare project:
 
-- `worker/src/index.ts` — request validation, Cal.com calls, response projection, caching, and error handling.
-- `worker/test/index.test.ts` — Worker behavior tests using mocked Cal.com responses and bindings.
-- `worker/wrangler.jsonc` — non-secret Worker configuration, Rate Limiting binding, observability, and production route.
-- `worker/package.json` and TypeScript configuration — local test, type-check, and deploy commands.
+- `public/index.html` — the one canonical site file, moved from the repository root without splitting the frontend.
+- `src/index.ts` — API request validation, Cal.com calls, response projection, caching, and error handling.
+- `test/index.test.ts` — Worker behavior tests using mocked Cal.com responses and generated binding types.
+- `wrangler.jsonc` — non-secret Static Assets configuration, `/api/*` worker-first routing, Rate Limiting binding, observability, and the `studio.solarshotmusic.com` custom domain.
+- `package.json` and TypeScript configuration — local test, type-check, dry-run, and deploy commands.
 
-`CALCOM_API_KEY` exists only as a Cloudflare Worker secret. No local committed file contains it.
+Static Assets uses `public/` as its only asset directory and invokes the Worker script first only for `/api/*`. Ordinary site requests are served directly from Cloudflare's asset layer. `CALCOM_API_KEY` exists only as a Cloudflare Worker secret; no committed file contains it.
 
 ## Domain and Cloudflare Flow
 
-1. Add `solarshotmusic.com` as a Cloudflare zone and record the two nameservers Cloudflare assigns.
-2. At Porkbun, replace the registrar-default nameservers with those exact Cloudflare nameservers. This is an owner-visible network change and must be verified at the registry before proceeding.
-3. Add the GitHub Pages custom domain `studio.solarshotmusic.com` and the repository `CNAME` artifact required by GitHub Pages.
-4. In Cloudflare DNS, create a temporary DNS-only `studio` CNAME targeting `solrza-dev.github.io`. Wait until GitHub Pages provisions and verifies HTTPS for the custom hostname.
-5. Change only that verified `studio` record to proxied, set SSL/TLS mode to Full (strict), enable Always Use HTTPS, and re-check the Cloudflare-to-GitHub origin path before treating the hostname as live.
-6. Deploy the Worker first to its temporary `workers.dev` URL, then attach only the `/api/bookings*` production route after its tests pass.
+1. Add `solarshotmusic.com` as a Cloudflare full-setup zone and record the two nameservers Cloudflare assigns.
+2. Inventory every Porkbun DNS record and confirm whether DNSSEC is enabled. Do not rely on Cloudflare's automatic scan as proof.
+3. Reproduce every existing record in Cloudflare before delegation. The new domain currently has no evidenced mail or application records, so no speculative records are added.
+4. At Porkbun, turn off DNSSEC first if it is active, then replace the four registrar-default nameservers with the two exact Cloudflare nameservers. This security-sensitive network change requires owner confirmation at the action point.
+5. Verify the registry and public resolvers return the assigned Cloudflare nameservers and wait until the zone reports Active.
+6. Deploy the complete Worker plus Static Assets to its temporary `workers.dev` URL and pass browser, API, secret, and responsive tests there.
+7. Attach `studio.solarshotmusic.com` as the Worker's Custom Domain. Cloudflare creates the DNS record and certificate; no external origin certificate or manual `studio` CNAME is required.
+8. Keep the zone encryption mode at Full (strict) and Always Use HTTPS. For this Worker Custom Domain, Cloudflare itself is the origin, so production does not depend on a separate GitHub certificate.
 
-The apex `solarshotmusic.com` is outside this implementation unless a redirect is required to make the selected studio hostname reachable. No email or unrelated DNS records will be invented.
+The apex `solarshotmusic.com` remains unassigned unless a redirect to `studio.solarshotmusic.com` is separately required for reachability. Porkbun remains the place to buy and renew the domain and manage registrar privacy; Cloudflare becomes the place to see and manage all operational DNS, hosting, certificates, Worker secrets, logs, analytics, and deployments.
 
 ## Cal.com Configuration
 
@@ -147,16 +150,16 @@ Implementation is complete only when all of these pass:
 4. Browser console remains error-free and the DOM contains exactly one embed script.
 5. Live Cal.com tests prove each event arrives pending with both payment questions; the consultation test is approved successfully.
 6. A known approved email returns only its upcoming accepted/pending sessions; an unknown email receives the same generic empty presentation.
-7. `https://studio.solarshotmusic.com` returns HTTPS 200, renders the calendar, and serves the Worker API route.
-8. The GitHub Pages URL remains HTTPS-reachable after the custom-domain cutover.
+7. `https://studio.solarshotmusic.com` returns HTTPS 200 from the Cloudflare Worker, renders the calendar, and serves the same-origin API route.
+8. Cloudflare's dashboard shows the active zone, production Worker deployment, Static Assets, Custom Domain, certificate, Rate Limiting binding, secret name, logs, and analytics in the intended account.
 9. Secret scanning finds no API key or credential material in the repository or Git history.
 10. Only after these checks pass are the implementation commits pushed to `main` and production rechecked after propagation.
 
 ## Rollback
 
-- Worker rollback: restore the prior Worker deployment version or detach the `/api/bookings*` route; the static site remains available.
-- DNS rollback: set the `studio` record to DNS-only or remove only the newly created `studio` record after recording its exact pre-state.
-- GitHub Pages rollback: remove the custom-domain setting and `CNAME` commit; the `github.io` URL remains the fallback.
+- Worker rollback: restore the prior Worker deployment version. Before cutover, the unchanged GitHub Pages URL remains the fallback; after a deliberate retirement, the tagged pre-migration commit remains the recovery source.
+- Domain rollback: detach the Worker Custom Domain, restore the exact pre-delegation Porkbun nameserver set only if Cloudflare activation fails, and verify the registry after either direction.
+- Hosting rollback: redeploy the last known-good Worker version. Before the migration commit is pushed, the unchanged GitHub Pages URL remains a live fallback; afterward, restore the tagged pre-migration commit to reactivate it if Cloudflare cannot be recovered promptly.
 - Cal.com rollback: disable the consultation event and revert only the two added questions/manual-approval toggles after recording pre-change state. Existing event prices, durations, and availability remain untouched.
 
 ## Stop Condition
