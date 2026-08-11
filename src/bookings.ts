@@ -43,6 +43,19 @@ export function normalizeEmail(value: string | null): string | null {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
 }
 
+export async function digestEmail(email: string): Promise<string> {
+  const bytes = new TextEncoder().encode(email);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+export function cacheRequestForDigest(digest: string): Request {
+  return new Request(`https://booking-cache.invalid/v1/${digest}`);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -133,6 +146,35 @@ function projectSessions(bookings: CalBooking[]): PublicSession[] {
     }));
 }
 
+function parseCachedSessions(value: unknown): PublicSession[] {
+  if (!isRecord(value) || !Array.isArray(value.sessions)) {
+    throw new Error("cache_invalid_schema");
+  }
+
+  return value.sessions.map((session) => {
+    if (!isRecord(session)) {
+      throw new Error("cache_invalid_schema");
+    }
+
+    const { title, start, end, status, eventTypeSlug } = session;
+    const keys = Object.keys(session).sort();
+    if (
+      keys.join(",") !== "end,eventTypeSlug,start,status,title" ||
+      typeof title !== "string" ||
+      typeof start !== "string" ||
+      typeof end !== "string" ||
+      (status !== "accepted" && status !== "pending") ||
+      typeof eventTypeSlug !== "string" ||
+      !Number.isFinite(Date.parse(start)) ||
+      !Number.isFinite(Date.parse(end))
+    ) {
+      throw new Error("cache_invalid_schema");
+    }
+
+    return { title, start, end, status, eventTypeSlug };
+  });
+}
+
 export async function handleRequest(
   request: Request,
   env: Env,
@@ -154,7 +196,39 @@ export async function handleRequest(
     return json({ error: "Enter a valid email address." }, 400);
   }
 
-  void ctx;
+  const emailDigest = await digestEmail(email);
+  const { success } = await env.BOOKINGS_RATE_LIMITER.limit({ key: emailDigest });
+  if (!success) {
+    console.warn(
+      JSON.stringify({
+        event: "booking_lookup_rate_limited",
+        path: "/api/bookings",
+      }),
+    );
+    return json(
+      { error: "Too many requests. Please wait briefly and try again." },
+      429,
+      { "Retry-After": "60" },
+    );
+  }
+
+  const cacheRequest = cacheRequestForDigest(emailDigest);
+  const cachedResponse = await caches.default.match(cacheRequest);
+  if (cachedResponse) {
+    try {
+      const sessions = parseCachedSessions(await cachedResponse.json());
+      console.info(
+        JSON.stringify({
+          event: "booking_lookup_succeeded",
+          session_count: sessions.length,
+          cache: "hit",
+        }),
+      );
+      return json({ sessions });
+    } catch {
+      ctx.waitUntil(caches.default.delete(cacheRequest));
+    }
+  }
 
   try {
     const lookupTime = now();
@@ -163,6 +237,16 @@ export async function handleRequest(
       fetchStatus(email, "unconfirmed", env, lookupTime),
     ]);
     const sessions = projectSessions([...upcoming, ...unconfirmed]);
+    const cacheResponse = Response.json(
+      { sessions },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=60",
+          "Content-Type": "application/json; charset=utf-8",
+        },
+      },
+    );
+    ctx.waitUntil(caches.default.put(cacheRequest, cacheResponse));
 
     console.info(
       JSON.stringify({
