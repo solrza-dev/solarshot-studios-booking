@@ -8,15 +8,46 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": true
   },
-  "ratelimits": [
-    {
-      "name": "BOOKINGS_RATE_LIMITER",
-      "namespace_id": "2026081101",
-      "simple": { "limit": 5, "period": 60 }
-    }
+  "routes": [
+    { "pattern": "studio.solarshotmusic.com", "custom_domain": true }
   ],
-  "secrets": { "required": ["CALCOM_API_KEY"] },
-  "observability": { "enabled": true, "head_sampling_rate": 1 }
+  "durable_objects": {
+    "bindings": [
+      { "name": "BOOKING_REQUEST_LIMITER", "class_name": "BookingRequestLimiter" },
+      { "name": "CAL_API_BUDGET", "class_name": "CalApiBudget" }
+    ]
+  },
+  "exports": {
+    "BookingRateLimiter": {
+      "type": "durable-object",
+      "state": "deleted"
+    },
+    "BookingRequestLimiter": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "CalApiBudget": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+    "TURNSTILE_HOSTNAMES": "studio.solarshotmusic.com",
+    "TURNSTILE_SITEKEY": "0x4AAAAAAENnkbBy0KGKWcVQ"
+  },
+  "secrets": {
+    "required": [
+      "CALCOM_API_KEY",
+      "RATE_LIMIT_SHARD_KEY",
+      "TURNSTILE_SECRET"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "invocation_logs": false }
+  }
 }

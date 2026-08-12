@@ -26,19 +26,21 @@ Complete the four remaining booking features without regressing the working Cal.
 
 ## Architecture
 
-One Cloudflare Worker project becomes the production origin for the complete site. Cloudflare Workers Static Assets serves the single HTML page, while the Worker script handles only `/api/*`. The Worker Custom Domain `studio.solarshotmusic.com` points every path on that hostname to this project; Cloudflare creates the necessary DNS record and certificate automatically after the zone is active.
+One Cloudflare Worker project becomes the production origin for the complete site. The Worker runs before Static Assets on every path so it can redirect all production HTTP requests before any page or form renders and attach security headers to every HTTPS response. Cloudflare Workers Static Assets still serves the single HTML page. The Worker Custom Domain `studio.solarshotmusic.com` points every path on that hostname to this project; Cloudflare creates the necessary DNS record and certificate automatically after the zone is active.
 
 The current GitHub Pages deployment remains untouched during development and Cloudflare preview testing. It stops being the selected production origin only after the Cloudflare custom hostname passes all acceptance checks. The repository may continue to exist on GitHub as source control, but Cloudflare owns production hosting and operations.
 
 The repository becomes one focused Cloudflare project:
 
 - `public/index.html` — the one canonical site file, moved from the repository root without splitting the frontend.
-- `src/index.ts` — API request validation, Cal.com calls, response projection, caching, and error handling.
+- `src/index.ts` — default Worker entry point and Durable Object export.
+- `src/bookings.ts` — transport enforcement, API request validation, bounded body reading, Cal.com authorization and listing calls, response projection, caching, and error handling.
+- `src/rate-limiter.ts` — 256 fixed HMAC-selected rolling request-limit shards plus one fixed rolling Cal.com call-budget Durable Object, all with transactional SQLite events and alarm cleanup.
 - `test/index.test.ts` — Worker behavior tests using mocked Cal.com responses and generated binding types.
-- `wrangler.jsonc` — non-secret Static Assets configuration, `/api/*` worker-first routing, Rate Limiting binding, observability, and the `studio.solarshotmusic.com` custom domain.
+- `wrangler.jsonc` — non-secret all-path Worker-first Static Assets configuration, Durable Object binding and migration, observability, and the `studio.solarshotmusic.com` custom domain.
 - `package.json` and TypeScript configuration — local test, type-check, dry-run, and deploy commands.
 
-Static Assets uses `public/` as its only asset directory and invokes the Worker script first only for `/api/*`. Ordinary site requests are served directly from Cloudflare's asset layer. `CALCOM_API_KEY` exists only as a Cloudflare Worker secret; no committed file contains it.
+Static Assets uses `public/` as its only asset directory and invokes the Worker script first for every path. Production HTTP requests receive an empty `308` to the same HTTPS URL before any asset or API work. HTTPS asset and API responses include `Strict-Transport-Security: max-age=31536000`. `CALCOM_API_KEY` and the independent `RATE_LIMIT_SHARD_KEY` exist only as Cloudflare Worker secrets; no committed file contains either value. The shard key is generated independently and is never reused as the Cal.com credential.
 
 ## Domain and Cloudflare Flow
 
@@ -81,13 +83,33 @@ The page receives four bounded additions:
 1. The fourth Artist Consultation card, using the exact existing card markup and five approved service bullets.
 2. The fourth session-switch chip and matching `SESSIONS` entry.
 3. Booking copy explaining the real sequence: choose a slot, submit a pending request, pay by the selected method, Isaiah verifies payment, Isaiah approves, and only then is the slot reserved.
-4. A My Sessions entry in header navigation, hero actions, and footer that opens a same-page panel with an email form and four explicit states: idle, loading, results, and generic empty/error.
+4. A My Sessions entry in header navigation, hero actions, and footer that opens a same-page panel requiring both the booking email and the private booking UID or Cal.com booking link from the confirmation, with four explicit states: idle, loading, results, and generic empty/error.
 
 Results show only title/type, start, end, and status in `America/Chicago`. The empty state never confirms whether an email address exists.
 
 ## Worker API Contract
 
-`GET /api/bookings?email=<address>` accepts one syntactically valid email address after trimming and lowercasing. All other methods return `405`; missing or invalid email returns `400`; rate-limit exhaustion returns `429`; upstream failure returns a generic `502` without Cal.com response contents.
+`POST /api/bookings` accepts only `Content-Type: application/json` and a JSON body with one syntactically valid email, the private Cal.com booking UID or booking link from that confirmation, and a fresh Turnstile token:
+
+```json
+{
+  "email": "client@example.com",
+  "bookingReference": "<private Cal.com booking UID or link>",
+  "turnstileToken": "<single-use Turnstile response>"
+}
+```
+
+The request body is read as a bounded stream and cancelled after at most 4,097 bytes; a body larger than 4,096 bytes is rejected without buffering the rest. All other methods return `405`; wrong content type returns `415`; malformed JSON, invalid fields, or a missing/oversized Turnstile token return `400`; Turnstile rejection returns a generic `403`; source or credential rate-limit exhaustion returns `429`; limiter, Siteverify, or Cal-budget availability failure returns a generic `503`; cache or Cal.com failure returns a generic `502`. None includes Cloudflare or Cal.com response contents.
+
+### Implementation safety addendum — 2026-08-11
+
+Live preview verification showed that Cloudflare invocation metadata records the full incoming request URL. To satisfy this specification's existing prohibition on raw customer identifiers in logs, the implemented interface is the JSON `POST` above. `GET`, including the superseded query-string form, returns `405`. Persisted automatic invocation logs are disabled, while privacy-safe custom event logs remain enabled.
+
+The first Durable Object correction used one object per email digest. Independent review rejected that design because arbitrary emails could create unbounded persistent object cardinality. A second single-global-object correction was also rejected: it let any 60 anonymous attempts block every customer and staggered credential windows could grow past its stated row ceiling. The final request limiter routes into exactly 256 fixed SQLite-backed `BookingRequestLimiter` shards. Shard selection is the first byte of `HMAC-SHA-256(RATE_LIMIT_SHARD_KEY, scope + ":" + digest)`, so callers cannot choose a target shard without the dedicated secret. Each shard atomically enforces rolling source and credential limits, rejects before insertion at 120 live events, deletes expired events through platform alarms, survives eviction, owns its clock, and fails closed. A separate fixed `CalApiBudget` object is intentionally global because it represents the one shared upstream API-key quota; it admits no more than 90 actual Cal GETs in any rolling 60 seconds.
+
+The deploy migrates Durable Object lifecycle management to Cloudflare's declarative `exports` configuration. It tombstones the obsolete `BookingRateLimiter` namespace, permanently deleting only rejected-design limiter counters/digests and their storage, and creates fresh `BookingRequestLimiter` plus `CalApiBudget` namespaces. No booking, attendee, payment, or other customer record is stored in these namespaces. The old limiter state is intentionally not recoverable after deployment.
+
+Before listing sessions, the Worker asks Cal.com for the exact `attendeeEmail` plus `bookingUid` pair and verifies that the returned booking is for that attendee, is `accepted` or `pending`, and has not ended. A syntactically malformed reference returns `400` before any limiter or external call. A well-formed nonexistent, cross-email, cancelled, or past reference returns the same successful empty payload as any other unauthorized pair. A valid current pair acts as a replayable bearer capability and authorizes the requested email to list all of its upcoming accepted and pending sessions. The reference is intentionally not one-time so the owner can revisit My Sessions; it must be kept private and not forwarded. It never appears in an incoming or customer-facing URL, cache key, custom log event, or response. It is sent only to Cal.com over HTTPS as the authenticated outbound `bookingUid` filter required for verification.
 
 The Worker calls the current Cal.com v2 endpoint `GET https://api.cal.com/v2/bookings` with:
 
@@ -103,7 +125,7 @@ Cal.com accepts only one status filter per request. The Worker therefore issues 
 - `status=upcoming` for accepted future bookings.
 - `status=unconfirmed` for pending/manual-approval bookings.
 
-The Worker merges, deduplicates, filters to actual booking statuses `accepted` and `pending`, sorts by start time, and returns only:
+The Worker treats Cal.com's `attendeeEmail` filter as a query hint, not an authorization guarantee. It locally requires every returned booking on every page to contain the normalized authorized email in its attendee list, then merges, deduplicates, filters to actual booking statuses `accepted` and `pending`, sorts by start time, and returns only:
 
 ```json
 {
@@ -123,35 +145,49 @@ No attendee objects, booking-form responses, payment handles, meeting URLs, loca
 
 ## Abuse and Privacy Controls
 
-- Use Cloudflare's Rate Limiting binding with a 60-second window.
-- Use a SHA-256 digest of the normalized email as the rate-limit key so raw addresses are not sent to the counter binding.
-- Cache only the projected minimal JSON for a short interval. Cache keys contain the email digest, not the raw address.
+- Use exactly 256 fixed HMAC-selected SQLite `BookingRequestLimiter` shards. Each shard stores only rolling-window event timestamps for opaque source-IP or credential digests, rejects before insertion at 120 live events, and deletes expired events through platform alarms. This bounds active limiter storage at 30,720 event rows across fixed object cardinality.
+- Apply the controls in this order: bounded parse; per-IP 10 requests in any rolling 60 seconds; mandatory Siteverify; per-credential 5 requests in any rolling 60 seconds; credential-pair cache; global Cal-call reservation; Cal.com.
+- Derive the stored source identifier as `HMAC-SHA-256(RATE_LIMIT_SHARD_KEY, "identifier:ip:" + rawIp)` so IPv4 rows and point-in-time recovery are not dictionary-reversible. Select each fixed shard with `HMAC-SHA-256(RATE_LIMIT_SHARD_KEY, scope + ":" + digest)`. Raw IPs, customer identifiers, booking references, Turnstile tokens, and secret keys never enter Durable Object names, rows, custom logs, cache URLs, or responses.
+- Use one separate fixed-name `CalApiBudget` Durable Object solely because the Cal.com API key is one shared upstream resource. It atomically admits at most 90 actual outbound Cal.com GETs in any rolling 60 seconds and reserves one slot immediately before every verification or pagination request. Siteverify calls do not spend this budget.
+- Do not use aligned minute windows for any final limiter. A burst straddling a clock boundary must still remain within the rolling ceiling.
+- Cache only projected minimal JSON or the generic empty result for a short interval after the email/reference pair has been checked. Cache keys contain the credential digest, not the raw email or booking reference.
+- Superseding cache correction: the final cache key is the email-plus-reference credential digest, not an email-only digest. Both authorized projected results and generic-empty unauthorized results live for 60 seconds, and every cache lookup still requires a fresh successful Turnstile validation.
 - Set `Cache-Control: private, max-age=0` on browser responses so lookup results are not stored in shared browser/proxy caches.
-- Return the same successful empty payload for a valid address with no matching bookings.
-- Emit structured operational logs without email addresses, API keys, response bodies, or booking details.
+- Return the same successful empty payload for every well-formed but unauthorized pair.
+- Emit structured operational logs without email addresses, booking references, digests, API keys, response bodies, or booking details.
+
+### Turnstile security architecture — owner-approved 2026-08-11
+
+The managed Turnstile widget appears only inside the My Sessions form and uses the stable action `my_sessions`. The widget is registered for `studio.solarshotmusic.com`, `localhost`, and `127.0.0.1`; the production Worker nevertheless accepts only a Siteverify response whose hostname exactly equals `studio.solarshotmusic.com`. The public sitekey may be committed in the HTML. `TURNSTILE_SECRET` exists only as a Worker secret.
+
+The browser explicitly renders one widget, retains its widget ID and current token, submits the token in the JSON body, then clears the token and resets that exact widget after every completed request. A retry therefore requires a fresh single-use token. Token, expired, error, and timeout callbacks keep submission disabled and show only generic visitor-safe guidance. A script error or ten-second initialization timeout stops the bounded readiness poll and tells the visitor to check the connection and refresh.
+
+The Worker sends the token and Cloudflare-provided client IP to `https://challenges.cloudflare.com/turnstile/v0/siteverify` with a ten-second timeout. It requires HTTP success, JSON schema validity, `success === true`, action `my_sessions`, and hostname exactly equal to the production hostname. Missing, invalid, expired, replayed, wrong-action, wrong-host, non-JSON, non-2xx, and timeout results all fail closed before cache or Cal.com access. Official Cloudflare dummy sitekeys and secret keys are test-only and are rejected by production configuration.
+
+The first valid lookup for an unknown credential pair spends one Cal reservation, writes a generic-empty 60-second cache entry, and returns the same empty payload used for all well-formed unauthorized pairs. The first valid authorized pair normally spends three Cal reservations: one reference verification plus one page for each of `upcoming` and `unconfirmed`. Pagination spends one reservation per page up to the existing ten-page ceiling per status. A positive or negative cache hit spends zero Cal reservations but still consumes a fresh Turnstile token and the two local rolling limits.
 
 ## Error Handling
 
-- Frontend validation catches empty or malformed addresses before a request.
+- Frontend validation catches empty or malformed addresses and empty booking references before a request.
 - A second submit aborts the prior browser request and starts a fresh loading state.
 - `400` shows an inline correction message without navigating away.
 - `429` asks the client to wait briefly and retry.
 - Network or upstream errors show a generic temporary-unavailable state.
-- Cal.com non-JSON, non-2xx, or schema-invalid responses fail closed and never leak upstream content.
+- Cal.com non-JSON, non-2xx, schema-invalid, cache, limiter, or excessive-pagination responses fail closed and never leak upstream content.
 - Partial success is not returned: if either required Cal.com status request fails, the Worker returns a generic error rather than an incomplete session list.
 
 ## Verification
 
 Implementation is complete only when all of these pass:
 
-1. Unit tests prove validation, method rejection, rate limiting, both Cal.com requests, response projection, deduplication, sorting, privacy filtering, empty state, and upstream failure behavior.
+1. Unit tests prove strict content handling, bounded streaming reads, validation, method rejection, authorization-pair behavior, HMAC selection across exactly 256 fixed shards, rolling per-source/per-credential and shard ceilings, rolling 90-call upstream budgeting, platform alarm delivery/re-arm/clear behavior, eviction persistence, Siteverify ordering and failure modes, pagination, local attendee membership on every listing page, both Cal.com listing requests, response projection, deduplication, sorting, privacy filtering, empty state, and fail-closed infrastructure/upstream behavior.
 2. Static assertions prove exactly one `embed.js` bootstrap reference and no static script tag.
 3. Desktop and sub-900px browser tests prove all four cards and chips select the correct live Cal.com event type.
 4. Browser console remains error-free and the DOM contains exactly one embed script.
 5. Live Cal.com tests prove each event arrives pending with both payment questions; the consultation test is approved successfully.
-6. A known approved email returns only its upcoming accepted/pending sessions; an unknown email receives the same generic empty presentation.
-7. `https://studio.solarshotmusic.com` returns HTTPS 200 from the Cloudflare Worker, renders the calendar, and serves the same-origin API route.
-8. Cloudflare's dashboard shows the active zone, production Worker deployment, Static Assets, Custom Domain, certificate, Rate Limiting binding, secret name, logs, and analytics in the intended account.
+6. A current valid email/reference pair returns only that email's upcoming accepted/pending sessions; syntactically malformed input receives the fixed correction response, while well-formed nonexistent, expired, cancelled, and cross-email references all receive the same generic empty presentation.
+7. `http://studio.solarshotmusic.com` redirects without rendering the form, while `https://studio.solarshotmusic.com` returns HTTPS 200 with HSTS from the Cloudflare Worker, renders the calendar, and serves the same-origin API route.
+8. Cloudflare's dashboard shows the active zone, production Worker deployment, Static Assets, Custom Domain, certificate, Durable Object binding, both secret names, logs, and analytics in the intended account.
 9. Secret scanning finds no API key or credential material in the repository or Git history.
 10. Only after these checks pass are the implementation commits pushed to `main` and production rechecked after propagation.
 
@@ -168,4 +204,4 @@ Stop immediately after the production acceptance checks pass and the verified im
 
 ## Implementation Evidence Correction — 2026-08-11
 
-Cloudflare's current Workers Rate Limiting documentation states that Rate Limiting bindings are not visible as dashboard objects. The approved behavior is unchanged. Acceptance evidence for `BOOKINGS_RATE_LIMITER` is the committed Wrangler configuration, an exercised `429` response, and privacy-safe Worker logs. The dashboard remains the operational surface for the zone, Worker, deployment, Static Assets, Custom Domain, certificate, secret name, logs, and analytics.
+The native Rate Limiting binding was replaced after it failed the live deterministic `429` test. Acceptance evidence for `BOOKING_REQUEST_LIMITER` is the committed fixed 256-shard Durable Object configuration and migration, the independent shard-secret name, HMAC/concurrency/boundary/rollover/platform-alarm tests, an exercised production `429`, bounded privacy-safe logs, and the Cloudflare deployment view. The dashboard remains the operational surface for the zone, Worker, deployment, Static Assets, Custom Domain, certificate, Durable Object namespace, secret names, logs, and analytics.

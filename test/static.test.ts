@@ -20,6 +20,34 @@ describe("static booking page contract", () => {
     expect(html).toContain(
       "Isaiah verifies payment and approves the request",
     );
+    expect(html).toContain('fetch("/api/bookings", {');
+    expect(html).toContain('method: "POST"');
+    expect(html).toContain(
+      "turnstileToken: token",
+    );
+    expect(html).toContain('id="booking-reference"');
+    expect(html).toContain("private booking reference from your Cal.com confirmation");
+    expect(html).not.toContain("/api/bookings?email=");
+  });
+
+  it("renders one explicit managed Turnstile surface for My Sessions", () => {
+    expect(
+      (
+        html.match(
+          /https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit/g,
+        ) ?? []
+      ).length,
+    ).toBe(1);
+    expect(html).toContain('id="turnstile-widget"');
+    expect(html).toContain('id="turnstile-script"');
+    expect(html).toContain("window.__turnstileScriptFailed = true");
+    expect(html).toContain('data-sitekey="__TURNSTILE_SITEKEY__"');
+    expect(html).toContain('action: "my_sessions"');
+    expect(html).toContain("window.turnstile.reset(turnstileWidgetId)");
+    expect(html).toContain("turnstileWaitCount >= 200");
+    expect(html).toContain("refresh this page and try again");
+    expect(html).not.toContain("1x00000000000000000000AA");
+    expect(html).not.toContain("TURNSTILE_SECRET");
   });
 
   it("maps four booking controls to the live Cal.com event types", () => {

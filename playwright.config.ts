@@ -4,12 +4,14 @@ export default defineConfig({
   testDir: "./test",
   testMatch: "**/*.spec.ts",
   webServer: {
-    command: "npx wrangler dev --local --port 8791",
-    url: "http://127.0.0.1:8791",
+    command: "npx wrangler dev --local --local-protocol https --port 8791 --var ENVIRONMENT:development --var TURNSTILE_HOSTNAMES:127.0.0.1 --var TURNSTILE_SITEKEY:1x00000000000000000000AA",
+    url: "https://127.0.0.1:8791",
+    ignoreHTTPSErrors: true,
     reuseExistingServer: false,
   },
   use: {
-    baseURL: "http://127.0.0.1:8791",
+    baseURL: "https://127.0.0.1:8791",
+    ignoreHTTPSErrors: true,
     trace: "retain-on-failure",
   },
   projects: [

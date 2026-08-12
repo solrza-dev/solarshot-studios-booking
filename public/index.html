@@ -192,7 +192,7 @@
     padding: 26px; box-shadow: var(--shadow);
   }
   .lookup-panel label { display: block; font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-bottom: 9px; }
-  .lookup-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .lookup-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
   .lookup-row input {
     width: 100%; min-height: 44px; border: 1px solid var(--line-2); border-radius: 12px;
     background: var(--bg-2); color: var(--text); font: inherit; padding: 10px 14px;
@@ -204,6 +204,7 @@
   }
   .lookup-help, .lookup-status { color: var(--muted); font-size: 13px; }
   .lookup-help { margin-top: 9px; }
+  .lookup-challenge { min-height: 65px; margin-top: 16px; }
   .lookup-status { min-height: 24px; margin-top: 18px; }
   .session-results { display: grid; gap: 10px; margin-top: 8px; }
   .session-results[hidden] { display: none; }
@@ -407,15 +408,24 @@
       <div class="wrap">
         <p class="kicker">Already requested a time?</p>
         <h2>My Sessions</h2>
-        <p class="sub">Use the same email you entered when booking to check upcoming accepted and pending requests.</p>
+        <p class="sub">Use the same email you entered when booking and the private booking reference from your Cal.com confirmation.</p>
         <div class="lookup-panel">
           <form id="my-sessions-form" novalidate>
-            <label for="booking-email">Email used to book</label>
             <div class="lookup-row">
-              <input id="booking-email" name="email" type="email" autocomplete="email" required />
+              <div>
+                <label for="booking-email">Email used to book</label>
+                <input id="booking-email" name="email" type="email" autocomplete="email" required />
+              </div>
+              <div>
+                <label for="booking-reference">Private booking reference</label>
+                <input id="booking-reference" name="bookingReference" type="text" autocomplete="off" inputmode="text" required />
+              </div>
               <button class="btn btn-primary" type="submit">Find my sessions</button>
             </div>
-            <p class="lookup-help">We show upcoming accepted and pending requests only.</p>
+            <p class="lookup-help">Paste the booking UID or Cal.com booking link from your confirmation. We show upcoming accepted and pending requests only.</p>
+            <div class="lookup-challenge">
+              <div id="turnstile-widget" data-sitekey="__TURNSTILE_SITEKEY__"></div>
+            </div>
           </form>
           <div id="my-sessions-status" class="lookup-status" aria-live="polite"></div>
           <div id="my-sessions-results" class="session-results" hidden></div>
@@ -458,6 +468,7 @@
   </footer>
 
   <!-- Cal.com embed — bootstrap injects embed.js itself (loading it statically here double-loads the script and breaks the embed) -->
+  <script id="turnstile-script" src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer onerror="window.__turnstileScriptFailed = true"></script>
   <script>
     (function (C, A, L) {
       let p = function (a, ar) { a.q.push(ar); };
@@ -541,14 +552,83 @@
 
     const mySessionsForm = document.getElementById("my-sessions-form");
     const bookingEmail = document.getElementById("booking-email");
+    const bookingReference = document.getElementById("booking-reference");
+    const lookupSubmit = mySessionsForm.querySelector('button[type="submit"]');
     const lookupStatus = document.getElementById("my-sessions-status");
     const lookupResults = document.getElementById("my-sessions-results");
+    const turnstileContainer = document.getElementById("turnstile-widget");
+    const turnstileScript = document.getElementById("turnstile-script");
     const sessionDateTime = new Intl.DateTimeFormat("en-US", {
       timeZone: "America/Chicago",
       dateStyle: "medium",
       timeStyle: "short"
     });
     let lookupController = null;
+    let lookupLoading = false;
+    let turnstileToken = "";
+    let turnstileWidgetId = null;
+
+    lookupSubmit.disabled = true;
+
+    function syncLookupSubmit() {
+      lookupSubmit.disabled = lookupLoading || turnstileToken.length === 0;
+    }
+
+    function clearTurnstile(message) {
+      turnstileToken = "";
+      syncLookupSubmit();
+      if (message) lookupStatus.textContent = message;
+    }
+
+    function mountTurnstile() {
+      if (turnstileWidgetId !== null || !window.turnstile) return;
+      turnstileWidgetId = window.turnstile.render(turnstileContainer, {
+        sitekey: turnstileContainer.dataset.sitekey,
+        action: "my_sessions",
+        theme: "dark",
+        size: "flexible",
+        callback(token) {
+          turnstileToken = token;
+          syncLookupSubmit();
+        },
+        "expired-callback"() {
+          clearTurnstile("Complete the verification check to continue.");
+        },
+        "error-callback"() {
+          clearTurnstile("Verification is temporarily unavailable. Please try again.");
+        },
+        "timeout-callback"() {
+          clearTurnstile("Complete the verification check to continue.");
+        }
+      });
+    }
+
+    let turnstileWaitCount = 0;
+    let turnstileReady = null;
+
+    function failTurnstileLoad() {
+      if (turnstileReady !== null) window.clearInterval(turnstileReady);
+      turnstileReady = null;
+      clearTurnstile(
+        "Verification could not load. Check your connection, then refresh this page and try again."
+      );
+    }
+
+    turnstileScript.addEventListener("error", failTurnstileLoad, { once: true });
+    if (window.__turnstileScriptFailed) {
+      failTurnstileLoad();
+    } else {
+      turnstileReady = window.setInterval(() => {
+        turnstileWaitCount += 1;
+        if (window.turnstile) {
+          window.clearInterval(turnstileReady);
+          turnstileReady = null;
+          mountTurnstile();
+          return;
+        }
+        if (turnstileWaitCount >= 200) failTurnstileLoad();
+      }, 50);
+    }
 
     function resetLookupResults() {
       lookupResults.replaceChildren();
@@ -597,27 +677,50 @@
     mySessionsForm.addEventListener("submit", async event => {
       event.preventDefault();
       const email = bookingEmail.value.trim().toLowerCase();
+      const reference = bookingReference.value.trim();
+      const token = turnstileToken;
 
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
-        lookupStatus.textContent = "Enter a valid email address.";
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+        email.length > 254 ||
+        reference.length < 8 ||
+        reference.length > 512
+      ) {
+        lookupStatus.textContent = "Enter a valid email and booking reference.";
+        resetLookupResults();
+        return;
+      }
+
+      if (!token) {
+        lookupStatus.textContent = "Complete the verification check to continue.";
         resetLookupResults();
         return;
       }
 
       if (lookupController) lookupController.abort();
       lookupController = new AbortController();
+      lookupLoading = true;
+      syncLookupSubmit();
       lookupStatus.textContent = "Loading your upcoming sessions…";
       resetLookupResults();
 
       try {
-        const response = await fetch(
-          "/api/bookings?email=" + encodeURIComponent(email),
-          { signal: lookupController.signal }
-        );
+        const response = await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            bookingReference: reference,
+            turnstileToken: token
+          }),
+          signal: lookupController.signal
+        });
 
         if (!response.ok) {
           if (response.status === 400) {
-            lookupStatus.textContent = "Enter a valid email address.";
+            lookupStatus.textContent = "Enter a valid email and booking reference.";
+          } else if (response.status === 403) {
+            lookupStatus.textContent = "Verification failed. Complete the check and try again.";
           } else if (response.status === 429) {
             lookupStatus.textContent = "Too many requests. Please wait briefly and try again.";
           } else {
@@ -644,6 +747,13 @@
         if (error instanceof DOMException && error.name === "AbortError") return;
         lookupStatus.textContent = "Sessions are temporarily unavailable. Please try again shortly.";
         resetLookupResults();
+      } finally {
+        lookupLoading = false;
+        turnstileToken = "";
+        if (turnstileWidgetId !== null && window.turnstile) {
+          window.turnstile.reset(turnstileWidgetId);
+        }
+        syncLookupSubmit();
       }
     });
 

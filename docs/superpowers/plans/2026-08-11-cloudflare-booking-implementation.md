@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Release status correction — 2026-08-11:** This file records the original execution sequence and its intermediate code snippets. It is not a current runbook. Independent release review invalidated the original email-only API, per-email Durable Object sharding, API-only Worker-first routing, and unbounded body handling. Those snippets are retained as decision history and must not be executed. The current contract is the sibling final design spec plus the checked-in implementation and tests. The security remediation addendum below states the superseding behavior.
+
 **Goal:** Complete the payment-lock flow, Artist Consultation option, privacy-minimized My Sessions lookup, and verified migration of the whole production site to `studio.solarshotmusic.com` on Cloudflare.
 
-**Architecture:** One Cloudflare Worker project serves `public/index.html` through Static Assets and runs Worker code first only for `/api/*`. The Worker validates and hashes lookup emails, rate-limits by the digest, queries Cal.com `upcoming` and `unconfirmed` bookings in parallel, projects only safe fields, and returns same-origin JSON. Porkbun remains the registrar; Cloudflare becomes authoritative DNS, hosting, HTTPS, secrets, logs, analytics, and deployment control.
+**Architecture:** One Cloudflare Worker project runs Worker code first on every path, redirects production HTTP before any form renders, and serves `public/index.html` through Static Assets with HSTS. My Sessions requires a matching booking email plus private current Cal.com booking UID/link and a fresh managed Turnstile token. An independent secret HMAC distributes opaque source and credential digests across exactly 256 fixed rolling SQLite Durable Object shards; a separate fixed rolling budget reserves no more than 90 actual Cal.com calls per minute. After authorization, the Worker queries paginated Cal.com `upcoming` and `unconfirmed` bookings, locally requires the authorized attendee on every result, projects only safe fields, and returns same-origin JSON. Porkbun remains the registrar; Cloudflare becomes authoritative DNS, hosting, HTTPS, secrets, logs, analytics, and deployment control.
 
-**Tech Stack:** Existing single-file HTML/CSS/JavaScript frontend; TypeScript 7.0.2; Cloudflare Wrangler 4.121.0; Workers Static Assets; Workers Rate Limiting binding; Workers Cache API; Vitest 4.1.10 with `@cloudflare/vitest-pool-workers` 0.21.1; Playwright 1.62.1.
+**Tech Stack:** Existing single-file HTML/CSS/JavaScript frontend; TypeScript 7.0.2; Cloudflare Wrangler 4.121.0; Workers Static Assets; SQLite Durable Objects; Workers Cache API; Vitest 4.1.10 with `@cloudflare/vitest-pool-workers` 0.21.1; Playwright 1.62.1.
 
 ## Global Constraints
 
@@ -18,8 +20,8 @@
 - Do not expose API keys, payment handles, attendee records, booking answers, meeting URLs, locations, IDs, or host data.
 - Preserve existing prices, durations, and Tue/Wed/Thu availability. Artist Consultation is 60 minutes on the same schedule and excludes music work.
 - Do not write a consultation slug until it has been observed from the authenticated live Cal.com event.
-- `CALCOM_API_KEY` is entered directly into `wrangler secret put`; it never appears in chat, shell history, source, `.dev.vars`, test fixtures, or Git.
-- Cloudflare's current Rate Limiting binding is not visible as a dashboard object. Verify it from `wrangler.jsonc`, exercised `429` behavior, and privacy-safe Worker logs; the dashboard remains the proof surface for the zone, Worker, deployment, assets, custom domain, certificate, secret name, logs, and analytics.
+- `CALCOM_API_KEY` and independently generated `RATE_LIMIT_SHARD_KEY` are entered directly into `wrangler secret put`; values never appear in chat, shell history, source, `.dev.vars`, test fixtures, or Git.
+- Verify the fixed 256-shard Durable Object design from `wrangler.jsonc`, HMAC/concurrency/storage/rollover/platform-alarm tests, exercised `429` behavior, and privacy-safe Worker logs; the dashboard remains the proof surface for the zone, Worker, deployment, assets, custom domain, certificate, Durable Object namespace, both secret names, logs, and analytics.
 - The Porkbun nameserver change is a security-sensitive network mutation. Pause for Isaiah's confirmation after the exact current and proposed nameserver sets are visible and before changing them.
 - The initial GitHub Pages URL remains unchanged until the Cloudflare custom-domain acceptance checks pass.
 
@@ -29,7 +31,8 @@
 
 - Move: `index.html` → `public/index.html` — canonical single-page frontend and Cal.com embed bootstrap.
 - Create: `src/index.ts` — default-only Worker entry point (named utility exports are invalid RPC entrypoints in current Wrangler-generated types).
-- Create: `src/bookings.ts` — Worker router, validation, hashing, rate limiting, cache, Cal.com client, schema validation, projection, and safe logs.
+- Create: `src/bookings.ts` — transport enforcement, Worker router, bounded validation, authorization, hashing, cache, paginated Cal.com client, schema validation, projection, and safe logs.
+- Create: `src/rate-limiter.ts` — fixed-cardinality HMAC-sharded SQLite Durable Objects with aligned transactional aggregate/credential windows and platform alarm cleanup.
 - Create: `src/worker-configuration.d.ts` — generated by `wrangler types`; never hand-edit.
 - Create: `test/index.test.ts` — Worker unit/integration behavior in the Workers runtime.
 - Create: `test/static.test.ts` — static HTML and privacy invariants.
@@ -41,7 +44,7 @@
 - Create: `tsconfig.tools.json` — Node-side Vitest and Playwright configuration type checking.
 - Create: `test/tsconfig.browser.json` — Playwright spec type checking without Workers globals.
 - Create: `package.json` and `package-lock.json` — exact scripts and pinned development dependencies.
-- Create: `wrangler.jsonc` — Worker, assets, rate limit, observability, secret declaration, and later the verified custom domain.
+- Create: `wrangler.jsonc` — Worker, all-path Worker-first assets, Durable Object migration/binding, observability, secret declaration, and the verified custom domain.
 - Create: `.gitignore` — dependency, Wrangler state, local-secret, and browser-output exclusions.
 - Create: `docs/operations/2026-08-11-calcom-configuration.md` — non-secret before/after record with observed consultation slug and test-booking evidence.
 - Create: `docs/operations/2026-08-11-cloudflare-cutover.md` — exact DNS inventory, assigned nameservers, deployment URLs, acceptance evidence, and rollback values.
@@ -806,6 +809,18 @@ Open Workers Logs/Analytics or use `npx wrangler tail` while making one success 
 
 ---
 
+### Live verification addendum — 2026-08-11
+
+The deployed preview exposed the email query parameter in Cloudflare's automatic invocation metadata. The privacy-preserving implementation therefore replaces every Task 3/5/7 query-string example with `POST /api/bookings`, `Content-Type: application/json`, and body `{"email":"<address>","bookingReference":"<private current Cal.com UID or booking link>"}`. `GET` now returns `405`. Persisted automatic invocation logs are disabled, and the live POST trace verified that no customer identifier appears in the incoming URL or custom log.
+
+The configured Cloudflare Rate Limiting binding did not return `429` under repeated same-key requests from one colo. An intermediate replacement sharded Durable Objects by email digest, but independent review rejected that design because unauthenticated unique-email requests could create unbounded persistent objects. A single-global-object replacement was also rejected because anonymous requests could block every customer and staggered rows defeated its stated ceiling. The final release uses exactly 256 HMAC-selected SQLite `BookingRequestLimiter` shards. Each shard atomically enforces rolling 10/source-IP and 5/email-reference-credential limits, rejects before insertion at 120 live events, owns its clock, and deletes expired events through platform alarms. A separate fixed `CalApiBudget` atomically admits at most 90 actual Cal GETs in any rolling 60 seconds. Shard selection requires independent secret `RATE_LIMIT_SHARD_KEY`, so callers cannot preselect a target shard. Limiter and budget exceptions fail closed.
+
+Email alone is not authorization. The Worker verifies the exact email/reference pair against Cal.com and accepts only a current `accepted` or `pending` booking for that attendee. It also locally requires that attendee on every paginated listing result. Syntactically malformed input returns `400` before any limiter or external call; well-formed nonexistent, cross-email, cancelled, and past references all return the same generic empty response. A valid current reference is an intentionally replayable bearer capability that authorizes the email to list its upcoming sessions; it is absent from incoming/customer URLs, custom logs, cache keys, and responses, and is sent only to Cal.com over authenticated HTTPS for verification.
+
+Every production-host HTTP request receives an empty same-URL `308` before assets, limiter, cache, or Cal.com work. Every HTTPS page/API response includes one-year HSTS. JSON bodies are read with a 4,096-byte streaming cap, and the reader is cancelled by byte 4,097. Wrong content types fail before parsing. Cal.com listing pagination is followed to a fixed ten-page ceiling and fails closed if more data remains. Cache/Cal failures return the same generic private `502`; limiter, Siteverify-configuration, and budget availability failures use generic private fail-closed responses under the final contract.
+
+The current release gate is: generated types unchanged; strict typecheck; complete Worker/static tests; twelve HTTPS Wrangler browser tests; deploy dry run; independent Fable re-review; then production deploy and live HTTP/HTTPS/API/DNS acceptance. Earlier unchecked snippets remain historical evidence only.
+
 ### Task 8: Activate the Cloudflare Zone and Custom Domain
 
 **Files:**
@@ -950,4 +965,62 @@ Stop immediately after the pushed commit and post-push production checks pass. D
 - **Spec coverage:** Tasks 2–3 cover API validation, dual Cal.com requests, privacy projection, cache, rate limiting, and failures; Tasks 4–6 cover payment copy, My Sessions, four cards/chips, responsive behavior, and embed regression; Tasks 5 and 9 cover live Cal.com pending/approval; Tasks 7–9 cover Cloudflare preview, DNS, HTTPS, secret, dashboard/runtime evidence, push, and production recheck.
 - **Placeholder scan:** No guessed consultation slug, Cloudflare nameserver, API key, account ID, or deployment URL is embedded. Each externally assigned value has an explicit observe-and-stop gate before use.
 - **Type consistency:** `PublicSession` fields match the approved API response and frontend renderer; `eventTypeSlug` is projected from Cal.com's `eventType.slug`; all binding names match `wrangler.jsonc` and generated `Env`.
-- **Technical correction:** Current Cloudflare docs say Rate Limiting bindings are not dashboard-visible. The plan preserves the feature and substitutes executable config/429/log evidence for that one impossible dashboard assertion.
+- **Technical correction:** The native Rate Limiting binding, intermediate per-email objects, intermediate single-global object, and aligned shard aggregate were superseded. The release uses 256 fixed HMAC-selected rolling SQLite request-limit shards plus one rolling global Cal-call budget, with concurrency, boundary, row-ceiling, alarm, eviction, deterministic `429`, and privacy-safe log evidence.
+
+---
+
+### Task 10: Add Turnstile and Protect the Shared Cal.com Quota
+
+**Status:** owner-approved 2026-08-11; this task supersedes the aligned per-shard aggregate limiter and the email-only cache described in earlier historical steps.
+
+**Files:**
+- Modify: `src/bookings.ts`
+- Replace final limiter behavior in: `src/rate-limiter.ts`
+- Modify: `src/index.ts`
+- Modify: `public/index.html`
+- Modify: `wrangler.jsonc`
+- Regenerate: `src/worker-configuration.d.ts`
+- Modify: `test/index.test.ts`, `test/rate-limiter.test.ts`, `test/static.test.ts`, `test/browser.spec.ts`
+- Modify: `docs/operations/2026-08-11-cloudflare-cutover.md`
+
+**Interfaces:**
+- `BookingRequestLimiter.checkIp(digest)` returns the atomic rolling 10/60 decision.
+- `BookingRequestLimiter.checkCredential(digest)` returns the atomic rolling 5/60 decision.
+- `CalApiBudget.reserve()` returns the atomic rolling 90/60 outbound-call decision.
+- `POST /api/bookings` adds `turnstileToken` and keeps the email/reference POST-only contract.
+
+- [ ] **Step 1: Write failing request and ordering tests**
+
+Prove the 4,096-byte cap, required token, production IP requirement, per-IP-before-Siteverify ordering, Siteverify body fields, exact action/hostname, every fail-closed response class, replay, and zero Cal/cache calls for rejected challenges.
+
+- [ ] **Step 2: Write failing rolling Durable Object tests**
+
+Prove concurrent 10/11 per IP and 5/6 per credential, the 59,999/60,000ms boundaries, backward-clock resistance, eviction persistence, alarm delete/clear/re-arm, fixed 256 HMAC shard names, the 120-event per-shard ceiling, keyed non-enumerable stored IP identifiers, and that rows contain neither raw IP nor customer credential text.
+
+- [ ] **Step 3: Write failing Cal budget and cache tests**
+
+Prove concurrent 90/91 reservations, a rolling cross-minute-boundary burst, eviction/alarm behavior, one reservation for an unknown pair, three for a normal authorized miss, 21 maximum for the existing pagination failure, no 91st outbound Cal fetch, credential-digest positive and generic-empty 60-second cache hits, and zero Cal reservations on cache hits.
+
+- [ ] **Step 4: Implement only enough production code to pass**
+
+Use the exact order: bounded parse → source limit → Siteverify → credential limit → credential cache → one reservation immediately before each Cal GET. Use a ten-second Siteverify timeout, exact production hostname `studio.solarshotmusic.com`, action `my_sessions`, and Cloudflare's `CF-Connecting-IP`. Keep every external response generic and private. Replace the obsolete `BookingRateLimiter` namespace through a declarative deleted tombstone so its rejected-design limiter-only data is permanently removed; create fresh `BookingRequestLimiter` and `CalApiBudget` SQLite namespaces.
+
+- [ ] **Step 5: Add explicit-render frontend tests and implementation**
+
+Load the Turnstile script exactly once, render managed mode only in My Sessions with action `my_sessions`, disable lookup until a token callback succeeds, include the token only in the JSON body, and reset the retained widget after every completed request. Stop the readiness poll and show refresh guidance on script error or a ten-second timeout. Stub the documented official test behavior only in local browser tests; production HTML must contain the real public sitekey.
+
+- [ ] **Step 6: Create and bind the real widget through the guarded Cloudflare flow**
+
+Probe `Account.Turnstile:Edit` without printing credentials. Register one managed widget for `studio.solarshotmusic.com`, `localhost`, and `127.0.0.1`; report only its public sitekey. Confirm the exact Worker target and current secret list, write `TURNSTILE_SECRET` over standard input, and verify only the binding name. Never persist or print the widget secret.
+
+- [ ] **Step 7: Run the frozen local gate and independent review**
+
+Run generated-type check, strict typecheck, full Worker/static suite, Wrangler dry run, HTTPS Playwright suite, `git diff --check`, and secret scans. Freeze the bytes and require a fresh independent Fable reviewer verdict. A NO-GO blocks deploy.
+
+- [ ] **Step 8: Deploy and exercise real single-use tokens**
+
+Deploy only after GO. On `studio.solarshotmusic.com`, obtain six fresh real tokens for the same reserved fake credential pair, prove the first five perform at most one negative cached Cal lookup and the sixth receives `429`, prove a replayed token is rejected, verify HTTP redirect/HSTS, and inspect privacy-safe logs without printing bodies, token, email, reference, or digests.
+
+- [ ] **Step 9: Record, push, and stop**
+
+Update the operations record and rendered AI Output Center release report, capture the Fable roadmap/addendum, commit the verified tree, push `main`, confirm remote parity, recheck production, and stop. Any additional protected surface, WAF rule, account system, or Cloudflare product is outside scope.

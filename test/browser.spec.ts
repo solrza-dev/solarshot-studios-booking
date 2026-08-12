@@ -7,6 +7,40 @@ test.beforeEach(async ({ page }) => {
       body: "",
     });
   });
+  await page.route(
+    "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
+    async (route) => {
+      await route.fulfill({
+        contentType: "application/javascript",
+        body: `
+          (() => {
+            let tokenNumber = 0;
+            let options;
+            window.turnstileTest = { renderCount: 0, resetCount: 0, options: null };
+            window.turnstile = {
+              render(_element, nextOptions) {
+                options = nextOptions;
+                window.turnstileTest.renderCount += 1;
+                window.turnstileTest.options = {
+                  sitekey: nextOptions.sitekey,
+                  action: nextOptions.action,
+                  theme: nextOptions.theme,
+                  size: nextOptions.size
+                };
+                queueMicrotask(() => nextOptions.callback("browser-token-" + (++tokenNumber)));
+                return "my-sessions-widget";
+              },
+              reset(widgetId) {
+                if (widgetId !== "my-sessions-widget") throw new Error("wrong widget reset");
+                window.turnstileTest.resetCount += 1;
+                queueMicrotask(() => options.callback("browser-token-" + (++tokenNumber)));
+              }
+            };
+          })();
+        `,
+      });
+    },
+  );
 });
 
 test("maps all four cards and chips to their verified Cal.com links", async ({
@@ -114,7 +148,7 @@ test("validates the lookup email before making a request", async ({ page }) => {
   await page.getByRole("button", { name: "Find my sessions" }).click();
 
   await expect(page.locator("#my-sessions-status")).toHaveText(
-    "Enter a valid email address.",
+    "Enter a valid email and booking reference.",
   );
   expect(apiCalls).toBe(0);
 });
@@ -122,11 +156,17 @@ test("validates the lookup email before making a request", async ({ page }) => {
 test("shows loading then renders only projected sessions in America/Chicago time", async ({
   page,
 }) => {
+  let lookupMethod = "";
+  let lookupUrl = "";
+  let lookupBody: unknown;
   let releaseResponse: (() => void) | undefined;
   const responseReady = new Promise<void>((resolve) => {
     releaseResponse = resolve;
   });
   await page.route("**/api/bookings**", async (route) => {
+    lookupMethod = route.request().method();
+    lookupUrl = route.request().url();
+    lookupBody = route.request().postDataJSON();
     await responseReady;
     await route.fulfill({
       json: {
@@ -155,10 +195,20 @@ test("shows loading then renders only projected sessions in America/Chicago time
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await page.locator("#booking-email").fill("client@example.com");
+  await page.locator("#booking-reference").fill("2NtaeaVcKfpmSZ4CthFdfk");
   await page.getByRole("button", { name: "Find my sessions" }).click();
   await expect(page.locator("#my-sessions-status")).toHaveText(
     "Loading your upcoming sessions…",
   );
+  expect(lookupMethod).toBe("POST");
+  expect(new URL(lookupUrl).pathname).toBe("/api/bookings");
+  expect(new URL(lookupUrl).search).toBe("");
+  expect(lookupUrl).not.toContain("client@example.com");
+  expect(lookupBody).toEqual({
+    email: "client@example.com",
+    bookingReference: "2NtaeaVcKfpmSZ4CthFdfk",
+    turnstileToken: "browser-token-1",
+  });
   releaseResponse?.();
 
   const results = page.locator("#my-sessions-results");
@@ -193,6 +243,7 @@ test("uses fixed empty and error messages", async ({ page }) => {
     },
     { status: 200, body: { sessions: [] } },
     { status: 400, body: { error: "private upstream detail" } },
+    { status: 403, body: { error: "private upstream detail" } },
     { status: 429, body: { error: "private upstream detail" } },
     { status: 502, body: { error: "private upstream detail" } },
   ];
@@ -203,6 +254,7 @@ test("uses fixed empty and error messages", async ({ page }) => {
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.locator("#booking-email").fill("client@example.com");
+  await page.locator("#booking-reference").fill("2NtaeaVcKfpmSZ4CthFdfk");
   const submit = page.getByRole("button", { name: "Find my sessions" });
   const status = page.locator("#my-sessions-status");
   const results = page.locator("#my-sessions-results");
@@ -219,7 +271,12 @@ test("uses fixed empty and error messages", async ({ page }) => {
   await expect(results).not.toContainText("Previous session");
 
   await submit.click();
-  await expect(status).toHaveText("Enter a valid email address.");
+  await expect(status).toHaveText("Enter a valid email and booking reference.");
+
+  await submit.click();
+  await expect(status).toHaveText(
+    "Verification failed. Complete the check and try again.",
+  );
 
   await submit.click();
   await expect(status).toHaveText(
@@ -230,4 +287,60 @@ test("uses fixed empty and error messages", async ({ page }) => {
   await expect(status).toHaveText(
     "Sessions are temporarily unavailable. Please try again shortly.",
   );
+});
+
+test("renders and resets one managed My Sessions challenge per request", async ({
+  page,
+}) => {
+  let token = "";
+  await page.route("**/api/bookings**", async (route) => {
+    token = route.request().postDataJSON().turnstileToken;
+    await route.fulfill({ json: { sessions: [] } });
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.locator("#booking-email").fill("client@example.com");
+  await page.locator("#booking-reference").fill("2NtaeaVcKfpmSZ4CthFdfk");
+
+  await page.getByRole("button", { name: "Find my sessions" }).click();
+  await expect(page.locator("#my-sessions-status")).toContainText(
+    "No upcoming sessions",
+  );
+
+  const turnstile = await page.evaluate(() =>
+    (window as typeof window & {
+      turnstileTest: {
+        renderCount: number;
+        resetCount: number;
+        options: Record<string, string>;
+      };
+    }).turnstileTest,
+  );
+  expect(turnstile).toEqual({
+    renderCount: 1,
+    resetCount: 1,
+    options: {
+      sitekey: "1x00000000000000000000AA",
+      action: "my_sessions",
+      theme: "dark",
+      size: "flexible",
+    },
+  });
+  expect(token).toBe("browser-token-1");
+});
+
+test("shows recovery guidance and stops lookup when the Turnstile script is blocked", async ({
+  page,
+}) => {
+  await page.route(
+    "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
+    async (route) => route.abort("blockedbyclient"),
+  );
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator("#my-sessions-status")).toHaveText(
+    "Verification could not load. Check your connection, then refresh this page and try again.",
+  );
+  await expect(
+    page.getByRole("button", { name: "Find my sessions" }),
+  ).toBeDisabled();
 });

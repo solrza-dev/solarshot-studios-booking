@@ -7,7 +7,8 @@
     "test:browser": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json && tsc --noEmit -p test/tsconfig.browser.json && tsc --noEmit -p tsconfig.tools.json",
     "types": "wrangler types ./src/worker-configuration.d.ts",
-    "check": "npm run types && npm run typecheck && npm test && wrangler deploy --dry-run",
+    "types:check": "wrangler types ./src/worker-configuration.d.ts --check",
+    "check": "npm run types:check && npm run typecheck && npm test && wrangler deploy --dry-run",
     "dev": "wrangler dev --local --port 8787",
     "deploy": "wrangler deploy"
   },
