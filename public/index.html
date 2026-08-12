@@ -119,7 +119,7 @@
   .sub { color: var(--muted); font-size: 16px; max-width: 60ch; margin-bottom: 40px; }
 
   /* ── Session cards ────────────────────────── */
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
   .card {
     display: flex; flex-direction: column; gap: 14px;
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
@@ -295,8 +295,8 @@
     <section class="block" id="sessions">
       <div class="wrap">
         <p class="kicker">Step 1 — Pick your session</p>
-        <h2>How do you want to use the room?</h2>
-        <p class="sub">Every session is in-person at the studio, fully hands-on, and includes the beat intake below so we show up ready.</p>
+        <h2>What can we help you do?</h2>
+        <p class="sub">Choose hands-on studio time or a focused artist-business consultation. Studio bookings include the beat intake below; Artist Consultation is not for music work.</p>
         <div class="grid" id="session-cards">
           <article class="card" data-link="solarshot-enterprises-t1k8k7/mixing-listening-session" data-name="Mixing &amp; Listening Session" data-dur="60 min">
             <span class="badge">60 min</span>
@@ -333,15 +333,29 @@
             </ul>
             <button class="btn btn-primary pick" data-index="2">Choose this session</button>
           </article>
+
+          <article class="card" data-link="solarshot-enterprises-t1k8k7/artist-consultation" data-name="Artist Consultation" data-dur="60 min">
+            <span class="badge">60 min</span>
+            <h3>Artist Consultation</h3>
+            <p>A focused strategy session for building the business around your artistry. Not for music work.</p>
+            <ul>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Web development &amp; websites</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Marketing strategy</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Merch &amp; product setup</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Photo shoots &amp; visual content</li>
+              <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#f5a524" stroke-width="2.2"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#f5a524" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Artist launch planning</li>
+            </ul>
+            <button class="btn btn-primary pick" data-index="3">Choose this session</button>
+          </article>
         </div>
       </div>
     </section>
 
     <section class="block" id="beat-flow">
       <div class="wrap">
-        <p class="kicker">Step 2 — Your beat, your way</p>
+        <p class="kicker">Step 2 — Studio sessions only</p>
         <h2>How will we handle your beat?</h2>
-        <p class="sub">You'll answer this inside the booking form — but here's what each option means.</p>
+        <p class="sub">For studio bookings, you'll answer this inside the booking form — here's what each option means.</p>
         <div class="steps">
           <div class="step">
             <span class="num">01</span>
@@ -377,6 +391,7 @@
               <button class="chip" data-link="solarshot-enterprises-t1k8k7/mixing-listening-session" data-name="Mixing &amp; Listening Session" data-dur="60 min">Mixing &amp; Listening · 60m</button>
               <button class="chip active" data-link="solarshot-enterprises-t1k8k7/studio-session-2-hours" data-name="Studio Session — 2 Hours" data-dur="2 hours">Studio · 2h</button>
               <button class="chip" data-link="solarshot-enterprises-t1k8k7/studio-session-4-hours" data-name="Studio Session — 4 Hours" data-dur="4 hours">Studio · 4h</button>
+              <button class="chip" data-link="solarshot-enterprises-t1k8k7/artist-consultation" data-name="Artist Consultation" data-dur="60 min">Artist Consultation · 60m</button>
             </div>
           </div>
           <div id="cal-embed"><div class="loader">Loading the calendar…</div></div>
@@ -467,7 +482,8 @@
     const SESSIONS = {
       "solarshot-enterprises-t1k8k7/mixing-listening-session": { name: "Mixing & Listening Session", dur: "60 min" },
       "solarshot-enterprises-t1k8k7/studio-session-2-hours":  { name: "Studio Session — 2 Hours", dur: "2 hours" },
-      "solarshot-enterprises-t1k8k7/studio-session-4-hours":  { name: "Studio Session — 4 Hours", dur: "4 hours" }
+      "solarshot-enterprises-t1k8k7/studio-session-4-hours":  { name: "Studio Session — 4 Hours", dur: "4 hours" },
+      "solarshot-enterprises-t1k8k7/artist-consultation": { name: "Artist Consultation", dur: "60 min", details: "Artist services consultation · Not for music work" }
     };
 
     let currentLink = "solarshot-enterprises-t1k8k7/studio-session-2-hours";
@@ -497,7 +513,7 @@
       const s = SESSIONS[calLink];
       document.getElementById("book-title").textContent = s.name;
       document.getElementById("book-meta").innerHTML =
-        "<b>" + s.dur + "</b> · In person at Solarshot Studios · Beat intake in the booking form";
+        "<b>" + s.dur + "</b> · " + (s.details || "In person at Solarshot Studios · Beat intake in the booking form");
 
       document.querySelectorAll("#session-switch .chip").forEach(c => {
         c.classList.toggle("active", c.dataset.link === calLink);
